@@ -3,12 +3,13 @@
 const http = require('http');
 const WebSocket = require('ws');
 const WebSocketStream = require('ws-streamify').default;
+const args = require('commander');
 
 
 class ReverserverClient {
-  constructor() {
+  constructor(port) {
 
-    const wss = new WebSocket.Server({ port: 8081 });
+    const wss = new WebSocket.Server({ port });
     wss.on('connection', (ws) => {
 
       console.log("New ws connection");
@@ -103,10 +104,15 @@ class ReverserverClient {
 }
 
 
+args
+  .option('-h, --http-port [port]', "HTTP server port", 7000)
+  .option('-w, --ws-port [port]', "WebSocket port", 8081)
+  .parse(process.argv);
+
 const closed = {};
 
-const httpServer = http.createServer(httpHandler).listen(7000);
-const rsClient = new ReverserverClient();
+const httpServer = http.createServer(httpHandler).listen(args.httpPort);
+const rsClient = new ReverserverClient(args.wsPort);
 
 function httpHandler(req, res){
   console.log(req.method, req.url, req.headers);
