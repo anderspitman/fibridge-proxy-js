@@ -4,33 +4,12 @@ const http = require('http');
 const WebSocket = require('ws');
 const WebSocketStream = require('ws-streamify').default;
 const args = require('commander');
+const uuid = require('uuid/v4');
 
 
 class ReverserverClient {
   constructor(httpServer) {
-
-    const wss = new WebSocket.Server({ server: httpServer });
-    wss.on('connection', (ws) => {
-
-      console.log("New ws connection");
-
-      ws.on('message', (message) => {
-        try {
-          const parsed = JSON.parse(message);
-          this.onMessage(parsed);
-        }
-        catch(e) {
-          console.log(e);
-        }
-      });
-
-      this._ws = ws;
-    });
-
-    this._nextRequestId = 0;
-
-    this._requests = {};
-
+    
     const streamHandler = (stream, settings) => {
 
       const id = settings.id;
@@ -82,6 +61,50 @@ class ReverserverClient {
       ws.addEventListener('message', messageHandler);
     };
 
+    const wss = new WebSocket.Server({ server: httpServer });
+
+    wss.on('connection', (ws) => {
+
+      const id = uuid();
+
+      console.log("New ws connection: " + id);
+
+      this._cons[id] = ws;
+
+      ws.send(JSON.stringify({
+        type: 'complete-handshake',
+        id,
+      }));
+
+      ws.on('message', (rawMessage) => {
+        const message = JSON.parse(rawMessage);
+
+        switch(message.type) {
+          case 'error':
+            const res = this._requests[message.requestId];
+            const e = message;
+            console.log("Error:", e);
+            res.writeHead(e.code, e.message, {'Content-type':'text/plain'});
+            res.end();
+            break;
+          default:
+            throw "Invalid message type: " + message.type
+            break;
+        }
+      });
+
+      ws.on('close', () => {
+        console.log("Remove connection: " + id);
+        delete this._cons[id];
+      });
+    });
+
+    this._cons = {};
+
+    this._nextRequestId = 0;
+
+    this._requests = {};
+
     new WebSocket.Server({ port: 8082 }).on('connection', wsHandler);
   }
 
@@ -91,24 +114,9 @@ class ReverserverClient {
     return requestId;
   }
 
-  send(message) {
-    this._ws.send(JSON.stringify(message));
-  }
-
-  onMessage(message, ws) {
-
-    switch(message.type) {
-      case 'error':
-        const res = this._requests[message.requestId];
-        const e = message;
-        console.log("Error:", e);
-        res.writeHead(e.code, e.message, {'Content-type':'text/plain'});
-        res.end();
-        break;
-      default:
-        throw "Invalid message type: " + message.type
-        break;
-    }
+  send(id, message) {
+    const ws = this._cons[id];
+    ws.send(JSON.stringify(message));
   }
 }
 
@@ -126,6 +134,10 @@ const rsClient = new ReverserverClient(httpServer);
 function httpHandler(req, res){
   console.log(req.method, req.url, req.headers);
   if (req.method === 'GET') {
+
+    const urlParts = req.url.split('/');
+    const id = urlParts[1];
+    const url = '/' + urlParts.slice(2).join('/');
 
     const options = {};
 
@@ -159,9 +171,9 @@ function httpHandler(req, res){
 
     const requestId = rsClient.getRequestId();
 
-    rsClient.send({
+    rsClient.send(id, {
       type: 'GET',
-      url: req.url,
+      url,
       range: options.range,
       requestId,
     });
