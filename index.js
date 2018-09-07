@@ -17,7 +17,7 @@ class ReverserverClient {
       ws.on('message', (message) => {
         try {
           const parsed = JSON.parse(message);
-          this.onCommand(parsed);
+          this.onMessage(parsed);
         }
         catch(e) {
           console.log(e);
@@ -63,11 +63,20 @@ class ReverserverClient {
 
     const wsHandler = (ws) => {
 
-      const messageHandler = (message) => {
-        ws.removeListener('message', messageHandler);
-        const settings = JSON.parse(message.data);
-        const stream = new WebSocketStream(ws, { highWaterMark: 1024 })
-        streamHandler(stream, settings);
+      const messageHandler = (rawMessage) => {
+
+        const message = JSON.parse(rawMessage.data);
+
+        switch (message.type) {
+          case 'convert-to-stream':
+            ws.removeListener('message', messageHandler);
+            const stream = new WebSocketStream(ws, { highWaterMark: 1024 })
+            streamHandler(stream, message);
+            break;
+          default:
+            throw "Invalid message type: " + message.type;
+            break;
+        }
       };
 
       ws.addEventListener('message', messageHandler);
@@ -86,18 +95,18 @@ class ReverserverClient {
     this._ws.send(JSON.stringify(message));
   }
 
-  onCommand(command) {
+  onMessage(message, ws) {
 
-    switch(command.type) {
+    switch(message.type) {
       case 'error':
-        const res = this._requests[command.requestId];
-        const e = command;
+        const res = this._requests[message.requestId];
+        const e = message;
         console.log("Error:", e);
         res.writeHead(e.code, e.message, {'Content-type':'text/plain'});
         res.end();
         break;
       default:
-        throw "Invalid command type: " + command.type
+        throw "Invalid message type: " + message.type
         break;
     }
   }
