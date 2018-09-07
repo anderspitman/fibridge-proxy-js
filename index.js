@@ -7,9 +7,9 @@ const args = require('commander');
 
 
 class ReverserverClient {
-  constructor(port) {
+  constructor(httpServer) {
 
-    const wss = new WebSocket.Server({ port });
+    const wss = new WebSocket.Server({ server: httpServer });
     wss.on('connection', (ws) => {
 
       console.log("New ws connection");
@@ -105,14 +105,14 @@ class ReverserverClient {
 
 
 args
-  .option('-h, --http-port [port]', "HTTP server port", 7000)
+  .option('-p, --port [number]', "Server port", 9001)
   .option('-w, --ws-port [port]', "WebSocket port", 8081)
   .parse(process.argv);
 
 const closed = {};
 
-const httpServer = http.createServer(httpHandler).listen(args.httpPort);
-const rsClient = new ReverserverClient(args.wsPort);
+const httpServer = http.createServer(httpHandler).listen(args.port);
+const rsClient = new ReverserverClient(httpServer);
 
 function httpHandler(req, res){
   console.log(req.method, req.url, req.headers);
