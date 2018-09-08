@@ -7,7 +7,7 @@ const args = require('commander');
 const uuid = require('uuid/v4');
 
 
-class ReverserverClient {
+class SocketManager {
   constructor(httpServer) {
     
     const streamHandler = (stream, settings) => {
@@ -107,13 +107,12 @@ class ReverserverClient {
 
 args
   .option('-p, --port [number]', "Server port", 9001)
-  .option('-w, --ws-port [port]', "WebSocket port", 8081)
   .parse(process.argv);
 
 const closed = {};
 
 const httpServer = http.createServer(httpHandler).listen(args.port);
-const rsClient = new ReverserverClient(httpServer);
+const rsClient = new SocketManager(httpServer);
 
 function httpHandler(req, res){
   console.log(req.method, req.url, req.headers);
@@ -136,22 +135,7 @@ function httpHandler(req, res){
       if (range[1]) {
         options.range.end = Number(range[1]);
       }
-      //else {
-      //  options.end = stats.size - 1;
-      //}
-
-      //const len = options.range.end - options.range.start;
-      res.statusCode = 206;
-      //res.setHeader('Content-Range', `bytes ${options.range.start}-${options.range.end}/*`);
-      //res.setHeader('Content-Range', `bytes ${options.start}-${options.end}/${stats.size}`);
-      //res.setHeader('Content-Length', len + 1);
-      res.setHeader('Accept-Ranges', 'bytes');
-      //res.setHeader('Content-Type', 'application/octet-stream');
     }
-
-    //res.responseCode = 206;
-    //res.writeHead(200, {'Content-type':'application/octet-stream'});
-    //res.setHeader('Content-type', 'application/octet-stream');
 
     const requestId = rsClient.getRequestId();
 
