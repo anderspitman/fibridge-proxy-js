@@ -34,6 +34,10 @@ class SocketManager {
         res.setHeader('Accept-Ranges', 'bytes');
         res.statusCode = 206;
       }
+      else {
+        res.setHeader('Content-Length', settings.size);
+        res.setHeader('Accept-Ranges', 'bytes');
+      }
 
       res.setHeader('Content-Type', 'application/octet-stream');
 
