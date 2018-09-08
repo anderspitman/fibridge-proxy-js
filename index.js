@@ -40,30 +40,31 @@ class ReverserverClient {
       stream.pipe(res);
     };
 
-    const wsHandler = (ws) => {
 
+    const wss = new WebSocket.Server({ server: httpServer });
+
+    wss.on('connection', (ws) => {
       const messageHandler = (rawMessage) => {
+        const message = JSON.parse(rawMessage);
 
-        const message = JSON.parse(rawMessage.data);
-
-        switch (message.type) {
+        switch(message.type) {
           case 'convert-to-stream':
             ws.removeListener('message', messageHandler);
             const stream = new WebSocketStream(ws, { highWaterMark: 1024 })
             streamHandler(stream, message);
             break;
+          case 'error':
+            const res = this._requests[message.requestId];
+            const e = message;
+            console.log("Error:", e);
+            res.writeHead(e.code, e.message, {'Content-type':'text/plain'});
+            res.end();
+            break;
           default:
-            throw "Invalid message type: " + message.type;
+            throw "Invalid message type: " + message.type
             break;
         }
       };
-
-      ws.addEventListener('message', messageHandler);
-    };
-
-    const wss = new WebSocket.Server({ server: httpServer });
-
-    wss.on('connection', (ws) => {
 
       const id = uuid();
 
@@ -76,22 +77,7 @@ class ReverserverClient {
         id,
       }));
 
-      ws.on('message', (rawMessage) => {
-        const message = JSON.parse(rawMessage);
-
-        switch(message.type) {
-          case 'error':
-            const res = this._requests[message.requestId];
-            const e = message;
-            console.log("Error:", e);
-            res.writeHead(e.code, e.message, {'Content-type':'text/plain'});
-            res.end();
-            break;
-          default:
-            throw "Invalid message type: " + message.type
-            break;
-        }
-      });
+      ws.on('message', messageHandler);
 
       ws.on('close', () => {
         console.log("Remove connection: " + id);
@@ -104,8 +90,6 @@ class ReverserverClient {
     this._nextRequestId = 0;
 
     this._requests = {};
-
-    new WebSocket.Server({ port: 8082 }).on('connection', wsHandler);
   }
 
   getRequestId() {
