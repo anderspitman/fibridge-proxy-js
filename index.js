@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-const http = require('http');
 const WebSocket = require('ws');
 const WebSocketStream = require('ws-streamify').default;
 const args = require('commander');
@@ -104,18 +103,38 @@ class SocketManager {
 
   send(id, message) {
     const ws = this._cons[id];
-    ws.send(JSON.stringify(message));
+    if (ws) {
+      ws.send(JSON.stringify(message));
+    }
   }
 }
 
 
 args
   .option('-p, --port [number]', "Server port", 9001)
+  .option('--cert [path]', "Certificate file path")
+  .option('--key [path]', "Private key file path")
   .parse(process.argv);
 
 const closed = {};
 
-const httpServer = http.createServer(httpHandler).listen(args.port);
+let httpServer;
+if (args.cert && args.key) {
+  const https = require('https');
+  const fs = require('fs');
+
+  const options = {
+    key: fs.readFileSync(args.key),
+    cert: fs.readFileSync(args.cert)
+  };
+  httpServer = https.createServer(options, httpHandler)
+    .listen(args.port);
+}
+else {
+  const http = require('http');
+  httpServer = http.createServer(httpHandler).listen(args.port);
+}
+
 const rsClient = new SocketManager(httpServer);
 
 function httpHandler(req, res){
