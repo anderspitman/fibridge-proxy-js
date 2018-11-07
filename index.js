@@ -6,13 +6,13 @@ const args = require('commander');
 const uuid = require('uuid/v4');
 
 
-class SocketManager {
+class RequestManager {
   constructor(httpServer) {
     
     const streamHandler = (stream, settings) => {
 
       const id = settings.id;
-      const res = this._requests[id];
+      const res = this._responseStreams[id];
 
       res.on('close', () => {
         stream.socket.close();
@@ -57,7 +57,7 @@ class SocketManager {
             streamHandler(stream, message);
             break;
           case 'error':
-            const res = this._requests[message.requestId];
+            const res = this._responseStreams[message.requestId];
             const e = message;
             console.log("Error:", e);
             res.writeHead(e.code, e.message, {'Content-type':'text/plain'});
@@ -92,10 +92,22 @@ class SocketManager {
 
     this._nextRequestId = 0;
 
-    this._requests = {};
+    this._responseStreams = {};
   }
 
-  getRequestId() {
+  addRequest(id, res, options) {
+
+    const requestId = this.getNextRequestId();
+
+    this.send(id, {
+      ...options,
+      requestId,
+    });
+
+    this._responseStreams[requestId] = res;
+  }
+
+  getNextRequestId() {
     const requestId = this._nextRequestId;
     this._nextRequestId++;
     return requestId;
@@ -140,7 +152,7 @@ else {
   httpServer = http.createServer(httpHandler).listen(args.port);
 }
 
-const rsClient = new SocketManager(httpServer);
+const requestManager = new RequestManager(httpServer);
 
 function httpHandler(req, res){
   console.log(req.method, req.url, req.headers);
@@ -165,16 +177,13 @@ function httpHandler(req, res){
       }
     }
 
-    const requestId = rsClient.getRequestId();
-
-    rsClient.send(id, {
+    requestManager.addRequest(id, res, {
       type: 'GET',
       url,
       range: options.range,
-      requestId,
     });
 
-    rsClient._requests[requestId] = res;
+    
   }
   else {
     res.writeHead(405, {'Content-type':'text/plain'});
