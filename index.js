@@ -104,7 +104,12 @@ class SocketManager {
   send(id, message) {
     const ws = this._cons[id];
     if (ws) {
-      ws.send(JSON.stringify(message));
+      if (ws.readyState == WebSocket.OPEN) {
+        ws.send(JSON.stringify(message));
+      }
+      else {
+        console.warn("Attempted to send when readyState = " + ws.readyState);
+      }
     }
   }
 }
