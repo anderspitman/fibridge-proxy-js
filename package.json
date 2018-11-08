@@ -12,6 +12,7 @@
   "author": "Anders Pitman",
   "license": "MIT",
   "dependencies": {
+    "busboy": "^0.2.14",
     "commander": "^2.17.1",
     "uuid": "^3.3.2",
     "ws": "^6.0.0",
