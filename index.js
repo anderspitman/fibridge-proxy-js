@@ -33,11 +33,12 @@ class HostManager {
     });
 
     this._hosts = {};
+    this._requests = {};
 
     this._nextRequestId = 0;
   }
 
-  addRequest(hostId, options) {
+  addRequest(hostId, req, res, options) {
 
     const requestId = this.getNextRequestId();
 
@@ -46,6 +47,8 @@ class HostManager {
       requestId,
     });
 
+    this._requests[requestId] = { req, res };
+
     return requestId;
   }
 
@@ -53,6 +56,38 @@ class HostManager {
     const requestId = this._nextRequestId;
     this._nextRequestId++;
     return requestId;
+  }
+
+  handleFile(file, settings) {
+
+    const { req, res } = this._requests[settings.requestId];
+
+    if (settings.start) {
+      let end;
+      if (settings.end) {
+        end = settings.end;
+      }
+      else {
+        end = settings.fileSize - 1;
+      }
+
+      const len = end - settings.start;
+      res.setHeader(
+        'Content-Range', `bytes ${settings.start}-${end}/${settings.fileSize}`);
+      res.setHeader('Content-Length', len + 1);
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.statusCode = 206;
+    }
+    else {
+      res.setHeader('Content-Length', settings.fileSize);
+      res.setHeader('Accept-Ranges', 'bytes');
+    }
+
+    res.setHeader('Content-Type', 'application/octet-stream');
+
+    res.setHeader('Content-Length', settings.fileSize);
+    file.pipe(res);
+    // TODO: delete request
   }
 
   send(hostId, message) {
@@ -128,8 +163,7 @@ function httpHandler(req, res){
         }
       }
 
-      console.log(options.range);
-      const requestId = hostManager.addRequest(hostId, {
+      const requestId = hostManager.addRequest(hostId, req, res, {
         type: 'GET',
         url,
         range: options.range,
@@ -147,29 +181,8 @@ function httpHandler(req, res){
 
     case 'POST': {
       console.log(req.url);
-
-      if (req.url === '/command') {
-
-        const command = {};
-
-        const busboy = new Busboy({ headers: req.headers });
-
-        busboy.on('field', function(fieldname, val, fieldnameTruncated, valTruncated, encoding, mimetype) {
-          command[fieldname] = val;
-        });
-        busboy.on('finish', function() {
-          console.log(command);
-          responses[command.requestId].writeHead(command.code, {'Content-type':'text/plain'});
-          responses[command.requestId].write(command.message);
-          responses[command.requestId].end();
-
-          res.writeHead(200, {'Content-type':'text/plain'});
-          res.write("OK");
-          res.end();
-        });
-        req.pipe(busboy);
-      }
-      else if (req.url === '/file') {
+      
+      if (req.url === '/file') {
 
         const settings = {};
 
@@ -187,38 +200,33 @@ function httpHandler(req, res){
           console.log("effing settings");
           console.log(settings);
 
-          if (settings.start) {
-            let end;
-            if (settings.end) {
-              end = settings.end;
-            }
-            else {
-              end = settings.fileSize - 1;
-            }
-
-            const len = end - settings.start;
-            responses[settings.requestId].setHeader(
-              'Content-Range', `bytes ${settings.start}-${end}/${settings.fileSize}`);
-            responses[settings.requestId].setHeader('Content-Length', len + 1);
-            responses[settings.requestId].setHeader('Accept-Ranges', 'bytes');
-            responses[settings.requestId].statusCode = 206;
-          }
-          else {
-            responses[settings.requestId].setHeader('Content-Length', settings.fileSize);
-            responses[settings.requestId].setHeader('Accept-Ranges', 'bytes');
-          }
-
-          responses[settings.requestId].setHeader('Content-Type', 'application/octet-stream');
-
-          responses[settings.requestId].setHeader('Content-Length', settings.fileSize);
-          file.pipe(responses[settings.requestId]);
-          console.log("after pipe");
-          delete responses[settings.requestId];
+          hostManager.handleFile(file, settings);
         });
         busboy.on('finish', function() {
           console.log("finish /file");
           res.writeHead(200, {'Content-type':'text/plain'});
           res.write("/file OK");
+          res.end();
+        });
+        req.pipe(busboy);
+      }
+      else if (req.url === '/command') {
+
+        const command = {};
+
+        const busboy = new Busboy({ headers: req.headers });
+
+        busboy.on('field', function(fieldname, val, fieldnameTruncated, valTruncated, encoding, mimetype) {
+          command[fieldname] = val;
+        });
+        busboy.on('finish', function() {
+          console.log(command);
+          responses[command.requestId].writeHead(command.code, {'Content-type':'text/plain'});
+          responses[command.requestId].write(command.message);
+          responses[command.requestId].end();
+
+          res.writeHead(200, {'Content-type':'text/plain'});
+          res.write("OK");
           res.end();
         });
         req.pipe(busboy);
