@@ -87,6 +87,14 @@ class HostManager {
 
     res.setHeader('Content-Length', settings.fileSize);
     file.pipe(res);
+
+    // If the connection closes before the file is finished streaming, this
+    // throws away the rest of the file. This is necessary because otherwise
+    // busboy never emits the finish event.
+    req.connection.addListener('close', function() {
+      file.resume();
+    });
+
     // TODO: delete request
   }
 
