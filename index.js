@@ -19,7 +19,7 @@ class RequestManager {
 
       console.log("New ws connection: " + id);
 
-      this._cons[id] = ws;
+      this._hosts[id] = ws;
 
       ws.send(JSON.stringify({
         type: 'complete-handshake',
@@ -28,27 +28,23 @@ class RequestManager {
 
       ws.on('close', () => {
         console.log("Remove connection: " + id);
-        delete this._cons[id];
+        delete this._hosts[id];
       });
     });
 
-    this._cons = {};
+    this._hosts = {};
 
     this._nextRequestId = 0;
-
-    this._responseStreams = {};
   }
 
-  addRequest(id, res, options) {
+  addRequest(hostId, options) {
 
     const requestId = this.getNextRequestId();
 
-    this.send(id, {
+    this.send(hostId, {
       ...options,
       requestId,
     });
-
-    this._responseStreams[requestId] = res;
 
     return requestId;
   }
@@ -59,8 +55,8 @@ class RequestManager {
     return requestId;
   }
 
-  send(id, message) {
-    const ws = this._cons[id];
+  send(hostId, message) {
+    const ws = this._hosts[hostId];
     if (ws) {
       if (ws.readyState == WebSocket.OPEN) {
         ws.send(JSON.stringify(message));
@@ -114,7 +110,7 @@ function httpHandler(req, res){
     case 'GET': {
       
       const urlParts = req.url.split('/');
-      const id = urlParts[1];
+      const hostId = urlParts[1];
       const url = '/' + urlParts.slice(2).join('/');
 
       const options = {};
@@ -133,7 +129,7 @@ function httpHandler(req, res){
       }
 
       console.log(options.range);
-      const requestId = requestManager.addRequest(id, res, {
+      const requestId = requestManager.addRequest(hostId, {
         type: 'GET',
         url,
         range: options.range,
