@@ -1,11 +1,9 @@
 #!/usr/bin/env node
 
 const WebSocket = require('ws');
-const WebSocketStream = require('ws-streamify').default;
 const args = require('commander');
 const uuid = require('uuid/v4');
 const Busboy = require('busboy');
-const inspect = require('util').inspect;
 
 
 class HostManager {
@@ -179,16 +177,10 @@ function httpHandler(req, res){
 
       responses[requestId] = res;
 
-
-      req.connection.addListener('close', function() {
-        console.log("conn closed: " + requestId);
-      });
-
       break;
     }
 
     case 'POST': {
-      console.log(req.url);
       
       if (req.url === '/file') {
 
@@ -205,13 +197,9 @@ function httpHandler(req, res){
         });
         busboy.on('file', function(fieldname, file, filename, encoding, mimetype) {
 
-          console.log("effing settings");
-          console.log(settings);
-
           hostManager.handleFile(file, settings);
         });
         busboy.on('finish', function() {
-          console.log("finish /file");
           res.writeHead(200, {'Content-type':'text/plain'});
           res.write("/file OK");
           res.end();
@@ -228,7 +216,6 @@ function httpHandler(req, res){
           command[fieldname] = val;
         });
         busboy.on('finish', function() {
-          console.log(command);
           responses[command.requestId].writeHead(command.code, {'Content-type':'text/plain'});
           responses[command.requestId].write(command.message);
           responses[command.requestId].end();
