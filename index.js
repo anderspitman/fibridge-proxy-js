@@ -8,7 +8,7 @@ const Busboy = require('busboy');
 const inspect = require('util').inspect;
 
 
-class RequestManager {
+class HostManager {
   constructor(httpServer) {
     
     const wss = new WebSocket.Server({ server: httpServer });
@@ -94,7 +94,7 @@ else {
   httpServer = http.createServer(httpHandler).listen(args.port);
 }
 
-const requestManager = new RequestManager(httpServer);
+const hostManager = new HostManager(httpServer);
 
 const responses = {};
 
@@ -129,7 +129,7 @@ function httpHandler(req, res){
       }
 
       console.log(options.range);
-      const requestId = requestManager.addRequest(hostId, {
+      const requestId = hostManager.addRequest(hostId, {
         type: 'GET',
         url,
         range: options.range,
