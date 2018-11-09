@@ -96,6 +96,15 @@ class HostManager {
     // TODO: delete request
   }
 
+  handleCommand(command) {
+
+    const { req, res } = this._requests[command.requestId];
+
+    res.writeHead(command.code, {'Content-type':'text/plain'});
+    res.write(command.message);
+    res.end();
+  }
+
   send(hostId, message) {
     const ws = this._hosts[hostId];
     if (ws) {
@@ -137,7 +146,6 @@ else {
 
 const hostManager = new HostManager(httpServer);
 
-const responses = {};
 
 function httpHandler(req, res){
   console.log(req.method, req.url, req.headers);
@@ -174,8 +182,6 @@ function httpHandler(req, res){
         url,
         range: options.range,
       });
-
-      responses[requestId] = res;
 
       break;
     }
@@ -216,9 +222,8 @@ function httpHandler(req, res){
           command[fieldname] = val;
         });
         busboy.on('finish', function() {
-          responses[command.requestId].writeHead(command.code, {'Content-type':'text/plain'});
-          responses[command.requestId].write(command.message);
-          responses[command.requestId].end();
+
+          hostManager.handleCommand(command);
 
           res.writeHead(200, {'Content-type':'text/plain'});
           res.write("OK");
