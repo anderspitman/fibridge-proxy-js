@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const WebSocket = require('ws');
-const WebSocketStream = require('@anderspitman/ws-streamify').default;
+const WebSocketStream = require('ws-streamify').default;
 const args = require('commander');
 const uuid = require('uuid/v4');
 
