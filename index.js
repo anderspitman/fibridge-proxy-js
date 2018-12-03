@@ -4,10 +4,14 @@ const WebSocket = require('ws');
 const WebSocketStream = require('ws-streamify').default;
 const args = require('commander');
 const uuid = require('uuid/v4');
+const { Peer } = require('netstreams');
+const url = require('url');
 
 
 class RequestManager {
   constructor(httpServer) {
+
+    const nsPeer = new Peer();
     
     const streamHandler = (stream, settings) => {
 
@@ -15,7 +19,9 @@ class RequestManager {
       const res = this._responseStreams[id];
 
       res.on('close', () => {
-        stream.socket.close();
+        console.log("closed: " + id);
+        stream.terminate();
+      //  stream.socket.close();
       });
 
       if (settings.range) {
@@ -28,33 +34,72 @@ class RequestManager {
         }
 
         const len = end - settings.range.start;
-        res.setHeader('Content-Range', `bytes ${settings.range.start}-${end}/${settings.size}`);
+        const contentRange = `bytes ${settings.range.start}-${end}/${settings.size}`;
+        console.log(contentRange);
+        res.setHeader('Content-Range', contentRange);
         res.setHeader('Content-Length', len + 1);
-        res.setHeader('Accept-Ranges', 'bytes');
         res.statusCode = 206;
       }
       else {
         res.setHeader('Content-Length', settings.size);
-        res.setHeader('Accept-Ranges', 'bytes');
       }
 
+      res.setHeader('Accept-Ranges', 'bytes');
       res.setHeader('Content-Type', 'application/octet-stream');
 
-      stream.pipe(res);
+      let idx = 0
+      //stream.pipe(res);
+      stream.onData((data) => {
+        if (idx % 10 === 0) {
+          console.log("still receiving")
+        }
+        idx++
+        //console.log(data)
+        res.write(new Buffer.from(data));
+      });
+
+      stream.onEnd(() => {
+        console.log("end stream");
+        res.end();
+      });
     };
 
 
-    const wss = new WebSocket.Server({ server: httpServer });
+    //const wss = new WebSocket.Server({ server: httpServer });
+    const signallingServer = new WebSocket.Server({ noServer: true });
+    const streamWsServer = new WebSocket.Server({ noServer: true });
 
-    wss.on('connection', (ws) => {
+    streamWsServer.on('connection', (ws) => {
+      console.log("streamy conn");
+
+      const conn = nsPeer.createConnection();
+      console.log(conn);
+
+      conn.setSendHandler((message) => {
+        ws.send(message)
+      })
+
+      ws.onmessage = (rawMessage) => {
+        conn.onMessage(rawMessage)
+      }
+
+      conn.onStream((stream, metadata) => {
+        console.log("md: ")
+        console.log(metadata)
+
+        streamHandler(stream, metadata);
+      })
+    });
+
+    signallingServer.on('connection', (ws) => {
       const messageHandler = (rawMessage) => {
         const message = JSON.parse(rawMessage);
 
         switch(message.type) {
           case 'convert-to-stream':
-            ws.removeListener('message', messageHandler);
-            const stream = new WebSocketStream(ws, { highWaterMark: 1024 })
-            streamHandler(stream, message);
+            //ws.removeListener('message', messageHandler);
+            //const stream = new WebSocketStream(ws, { highWaterMark: 1024 })
+            //streamHandler(stream, message);
             break;
           case 'error':
             const res = this._responseStreams[message.requestId];
@@ -86,6 +131,21 @@ class RequestManager {
         console.log("Remove connection: " + id);
         delete this._cons[id];
       });
+    });
+
+    httpServer.on('upgrade', function upgrade(request, socket, head) {
+      const pathname = url.parse(request.url).pathname;
+
+      if (pathname === '/stream') {
+        streamWsServer.handleUpgrade(request, socket, head, function done(ws) {
+          streamWsServer.emit('connection', ws, request);
+        });
+      }
+      else {
+        signallingServer.handleUpgrade(request, socket, head, function done(ws) {
+          signallingServer.emit('connection', ws, request);
+        });
+      }
     });
 
     this._cons = {};
@@ -164,6 +224,8 @@ function httpHandler(req, res){
 
     const options = {};
 
+    // TODO: parse byte range specs properly according to
+    // https://tools.ietf.org/html/rfc7233
     if (req.headers.range) {
 
       options.range = {};
