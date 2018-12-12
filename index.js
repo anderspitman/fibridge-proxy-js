@@ -80,7 +80,7 @@ class RequestManager {
       })
 
       ws.onmessage = (message) => {
-        conn.onMessage(message.data)
+        conn.handleMessage(message.data)
       }
 
       conn.onStream((stream, metadata) => {
