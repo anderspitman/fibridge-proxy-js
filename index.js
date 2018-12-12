@@ -51,7 +51,7 @@ class RequestManager {
       //stream.pipe(res);
       stream.onData((data) => {
         if (idx % 10 === 0) {
-          console.log("still receiving")
+          //console.log("still receiving")
         }
         idx++
         //console.log(data)
@@ -79,8 +79,8 @@ class RequestManager {
         ws.send(message)
       })
 
-      ws.onmessage = (rawMessage) => {
-        conn.onMessage(rawMessage)
+      ws.onmessage = (message) => {
+        conn.onMessage(message.data)
       }
 
       conn.onStream((stream, metadata) => {
