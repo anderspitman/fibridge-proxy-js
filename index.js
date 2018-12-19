@@ -56,12 +56,16 @@ class RequestManager {
         idx++
         //console.log(data)
         res.write(new Buffer.from(data));
+
+        stream.request(1)
       });
 
       stream.onEnd(() => {
         console.log("end stream");
         res.end();
       });
+
+      stream.request(10)
     };
 
 
