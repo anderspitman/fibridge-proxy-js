@@ -4,8 +4,8 @@ const WebSocket = require('ws');
 const WebSocketStream = require('ws-streamify').default;
 const args = require('commander');
 const uuid = require('uuid/v4');
-const { Peer } = require('netstreams');
 const url = require('url');
+const { Peer } = require('omnistreams-concurrent');
 const { WriteStreamAdapter } = require('omnistreams-node-adapter')
 
 
