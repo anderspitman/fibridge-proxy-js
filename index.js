@@ -6,6 +6,7 @@ const args = require('commander');
 const uuid = require('uuid/v4');
 const { Peer } = require('netstreams');
 const url = require('url');
+const { WriteStreamAdapter } = require('omnistreams-node-adapter')
 
 
 class RequestManager {
@@ -18,11 +19,11 @@ class RequestManager {
       const id = settings.id;
       const res = this._responseStreams[id];
 
-      res.on('close', () => {
-        console.log("closed: " + id);
-        stream.terminate();
-      //  stream.socket.close();
-      });
+      //res.on('close', () => {
+      //  console.log("closed: " + id);
+      //  stream.terminate();
+      ////  stream.socket.close();
+      //});
 
       if (settings.range) {
         let end;
@@ -47,25 +48,7 @@ class RequestManager {
       res.setHeader('Accept-Ranges', 'bytes');
       res.setHeader('Content-Type', 'application/octet-stream');
 
-      let idx = 0
-      //stream.pipe(res);
-      stream.onData((data) => {
-        if (idx % 10 === 0) {
-          //console.log("still receiving")
-        }
-        idx++
-        //console.log(data)
-        res.write(new Buffer.from(data));
-
-        stream.request(1)
-      });
-
-      stream.onEnd(() => {
-        console.log("end stream");
-        res.end();
-      });
-
-      stream.request(10)
+      stream.pipe(new WriteStreamAdapter({ nodeStream: res, bufferSize: 10 }))
     };
 
 
