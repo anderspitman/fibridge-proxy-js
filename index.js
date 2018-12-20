@@ -19,12 +19,6 @@ class RequestManager {
       const id = settings.id;
       const res = this._responseStreams[id];
 
-      //res.on('close', () => {
-      //  console.log("closed: " + id);
-      //  stream.terminate();
-      ////  stream.socket.close();
-      //});
-
       if (settings.range) {
         let end;
         if (settings.range.end) {
