@@ -64,6 +64,11 @@ class RequestManager {
         conn.handleMessage(message.data)
       }
 
+      conn.onControlMessage((message) => {
+      })
+
+      conn.sendControlMessage(new Uint8Array([44,45,56]))
+
       conn.onStream((stream, metadata) => {
         console.log("md: ")
         console.log(metadata)
