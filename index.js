@@ -122,7 +122,7 @@ class RequestManager {
     httpServer.on('upgrade', function upgrade(request, socket, head) {
       const pathname = url.parse(request.url).pathname;
 
-      if (pathname === '/stream') {
+      if (pathname === '/omnistreams') {
         streamWsServer.handleUpgrade(request, socket, head, function done(ws) {
           streamWsServer.emit('connection', ws, request);
         });
