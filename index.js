@@ -5,15 +5,13 @@ const WebSocketStream = require('ws-streamify').default;
 const args = require('commander');
 const uuid = require('uuid/v4');
 const url = require('url');
-const { Peer } = require('omnistreams-concurrent');
+const { Multiplexer } = require('omnistreams-concurrent');
 const { WriteStreamAdapter } = require('omnistreams-node-adapter')
 
 
 class RequestManager {
   constructor(httpServer) {
 
-    const nsPeer = new Peer();
-    
     const streamHandler = (stream, settings) => {
 
       const id = settings.id;
@@ -51,29 +49,29 @@ class RequestManager {
     const streamWsServer = new WebSocket.Server({ noServer: true });
 
     streamWsServer.on('connection', (ws) => {
-      console.log("streamy conn");
+      console.log("streamy mux");
 
-      const conn = nsPeer.createConnection();
-      console.log(conn);
+      const mux = new Multiplexer()
+      console.log(mux);
 
-      conn.setSendHandler((message) => {
+      mux.setSendHandler((message) => {
         ws.send(message)
       })
 
       ws.onmessage = (message) => {
-        conn.handleMessage(message.data)
+        mux.handleMessage(message.data)
       }
 
-      conn.onControlMessage((message) => {
+      mux.onControlMessage((message) => {
       })
 
-      conn.sendControlMessage(new Uint8Array([44,45,56]))
+      mux.sendControlMessage(new Uint8Array([44,45,56]))
 
-      conn.onStream((stream, metadata) => {
+      mux.onProducer((producer, metadata) => {
         console.log("md: ")
         console.log(metadata)
 
-        streamHandler(stream, metadata);
+        streamHandler(producer, metadata);
       })
     });
 
