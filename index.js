@@ -47,7 +47,6 @@ class RequestManager {
 
 
     //const wss = new WebSocket.Server({ server: httpServer });
-    const signallingServer = new WebSocket.Server({ noServer: true });
     const streamWsServer = new WebSocket.Server({ noServer: true });
 
     streamWsServer.on('connection', (ws) => {
@@ -66,27 +65,6 @@ class RequestManager {
 
       mux.onControlMessage((rawMessage) => {
         const message = JSON.parse(ab2str(rawMessage))
-        console.log(message)
-      })
-
-      const message = new Uint8Array(str2ab(JSON.stringify({
-        og: "Hi there",
-      })))
-
-      mux.sendControlMessage(message)
-
-      mux.onConduit((producer, metadata) => {
-        console.log("md: ")
-        console.log(metadata)
-
-        streamHandler(producer, metadata);
-      })
-    });
-
-    signallingServer.on('connection', (ws) => {
-      const messageHandler = (rawMessage) => {
-        const message = JSON.parse(rawMessage);
-
         switch(message.type) {
           case 'convert-to-stream':
             //ws.removeListener('message', messageHandler);
@@ -104,24 +82,29 @@ class RequestManager {
             throw "Invalid message type: " + message.type
             break;
         }
-      };
+      })
+
+      mux.onConduit((producer, metadata) => {
+        console.log("md: ")
+        console.log(metadata)
+
+        streamHandler(producer, metadata);
+      })
 
       const id = uuid();
 
       console.log("New ws connection: " + id);
 
-      this._cons[id] = ws;
+      this._muxes[id] = mux;
 
-      ws.send(JSON.stringify({
+      mux.sendControlMessage(new Uint8Array(str2ab(JSON.stringify({
         type: 'complete-handshake',
         id,
-      }));
-
-      ws.on('message', messageHandler);
+      }))))
 
       ws.on('close', () => {
         console.log("Remove connection: " + id);
-        delete this._cons[id];
+        delete this._muxes[id];
       });
     });
 
@@ -133,14 +116,9 @@ class RequestManager {
           streamWsServer.emit('connection', ws, request);
         });
       }
-      else {
-        signallingServer.handleUpgrade(request, socket, head, function done(ws) {
-          signallingServer.emit('connection', ws, request);
-        });
-      }
     });
 
-    this._cons = {};
+    this._muxes = {};
 
     this._nextRequestId = 0;
 
@@ -166,15 +144,8 @@ class RequestManager {
   }
 
   send(id, message) {
-    const ws = this._cons[id];
-    if (ws) {
-      if (ws.readyState == WebSocket.OPEN) {
-        ws.send(JSON.stringify(message));
-      }
-      else {
-        console.warn("Attempted to send when readyState = " + ws.readyState);
-      }
-    }
+    const mux = this._muxes[id]
+    mux.sendControlMessage(new Uint8Array(str2ab(JSON.stringify(message))))
   }
 }
 
