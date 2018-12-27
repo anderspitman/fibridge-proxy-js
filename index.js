@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 const WebSocket = require('ws');
-const WebSocketStream = require('ws-streamify').default;
 const args = require('commander');
 const uuid = require('uuid/v4');
 const url = require('url');
@@ -46,7 +45,6 @@ class RequestManager {
     };
 
 
-    //const wss = new WebSocket.Server({ server: httpServer });
     const streamWsServer = new WebSocket.Server({ noServer: true });
 
     streamWsServer.on('connection', (ws) => {
@@ -66,11 +64,6 @@ class RequestManager {
       mux.onControlMessage((rawMessage) => {
         const message = JSON.parse(ab2str(rawMessage))
         switch(message.type) {
-          case 'convert-to-stream':
-            //ws.removeListener('message', messageHandler);
-            //const stream = new WebSocketStream(ws, { highWaterMark: 1024 })
-            //streamHandler(stream, message);
-            break;
           case 'error':
             const res = this._responseStreams[message.requestId];
             const e = message;
