@@ -5,6 +5,8 @@ const WebSocketStream = require('ws-streamify').default;
 const args = require('commander');
 const uuid = require('uuid/v4');
 const url = require('url');
+const ab2str = require('arraybuffer-to-string')
+const str2ab = require('string-to-arraybuffer')
 const { Multiplexer } = require('omnistreams-concurrent');
 const { WriteStreamAdapter } = require('omnistreams-node-adapter')
 
@@ -62,10 +64,16 @@ class RequestManager {
         mux.handleMessage(message.data)
       }
 
-      mux.onControlMessage((message) => {
+      mux.onControlMessage((rawMessage) => {
+        const message = JSON.parse(ab2str(rawMessage))
+        console.log(message)
       })
 
-      mux.sendControlMessage(new Uint8Array([44,45,56]))
+      const message = new Uint8Array(str2ab(JSON.stringify({
+        og: "Hi there",
+      })))
+
+      mux.sendControlMessage(message)
 
       mux.onConduit((producer, metadata) => {
         console.log("md: ")
