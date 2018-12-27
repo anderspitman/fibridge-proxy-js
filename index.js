@@ -67,7 +67,7 @@ class RequestManager {
 
       mux.sendControlMessage(new Uint8Array([44,45,56]))
 
-      mux.onChannel((producer, metadata) => {
+      mux.onConduit((producer, metadata) => {
         console.log("md: ")
         console.log(metadata)
 
