@@ -41,7 +41,22 @@ class RequestManager {
       res.setHeader('Accept-Ranges', 'bytes');
       res.setHeader('Content-Type', 'application/octet-stream');
 
-      stream.pipe(new WriteStreamAdapter({ nodeStream: res, bufferSize: 10 }))
+      //stream.pipe(new WriteStreamAdapter({ nodeStream: res, bufferSize: 10 }))
+
+      stream.onData((data) => {
+        res.write(Buffer.from(data))
+        stream.request(1)
+      })
+
+      stream.onEnd(() => {
+        res.end()
+      })
+
+      res.on('close', () => {
+        stream.terminate()
+      })
+
+      stream.request(10)
     };
 
 
@@ -54,7 +69,9 @@ class RequestManager {
       console.log(mux);
 
       mux.setSendHandler((message) => {
-        ws.send(message)
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(message)
+        }
       })
 
       ws.onmessage = (message) => {
@@ -70,6 +87,8 @@ class RequestManager {
             console.log("Error:", e);
             res.writeHead(e.code, e.message, {'Content-type':'text/plain'});
             res.end();
+            break;
+          case 'keep-alive':
             break;
           default:
             throw "Invalid message type: " + message.type
