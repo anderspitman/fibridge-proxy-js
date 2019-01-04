@@ -157,7 +157,9 @@ class RequestManager {
 
   send(id, message) {
     const mux = this._muxes[id]
-    mux.sendControlMessage(new Uint8Array(str2ab(JSON.stringify(message))))
+    if (mux) {
+      mux.sendControlMessage(new Uint8Array(str2ab(JSON.stringify(message))))
+    }
   }
 }
 
