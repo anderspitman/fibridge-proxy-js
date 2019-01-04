@@ -4,10 +4,12 @@ const WebSocket = require('ws');
 const args = require('commander');
 const uuid = require('uuid/v4');
 const url = require('url');
-const ab2str = require('arraybuffer-to-string')
-const str2ab = require('string-to-arraybuffer')
-const { Multiplexer } = require('omnistreams-concurrent');
-const { WriteStreamAdapter } = require('omnistreams-node-adapter')
+const { 
+  Multiplexer,
+  encodeObject,
+  decodeObject
+} = require('omnistreams')
+//const { WriteStreamAdapter } = require('omnistreams-node-adapter')
 
 
 class RequestManager {
@@ -41,6 +43,8 @@ class RequestManager {
       res.setHeader('Accept-Ranges', 'bytes');
       res.setHeader('Content-Type', 'application/octet-stream');
 
+      // TODO: fix the node adapter. The way we're doing things below doesn't
+      // have backpressuring from node.
       //stream.pipe(new WriteStreamAdapter({ nodeStream: res, bufferSize: 10 }))
 
       stream.onData((data) => {
@@ -79,7 +83,7 @@ class RequestManager {
       }
 
       mux.onControlMessage((rawMessage) => {
-        const message = JSON.parse(ab2str(rawMessage))
+        const message = decodeObject(rawMessage)
         switch(message.type) {
           case 'error':
             const res = this._responseStreams[message.requestId];
@@ -96,10 +100,9 @@ class RequestManager {
         }
       })
 
-      mux.onConduit((producer, metadata) => {
-        console.log("md: ")
+      mux.onConduit((producer, md) => {
+        const metadata = decodeObject(md)
         console.log(metadata)
-
         streamHandler(producer, metadata);
       })
 
@@ -109,10 +112,10 @@ class RequestManager {
 
       this._muxes[id] = mux;
 
-      mux.sendControlMessage(new Uint8Array(str2ab(JSON.stringify({
+      mux.sendControlMessage(encodeObject({
         type: 'complete-handshake',
         id,
-      }))))
+      }))
 
       ws.on('close', () => {
         console.log("Remove connection: " + id);
@@ -158,7 +161,7 @@ class RequestManager {
   send(id, message) {
     const mux = this._muxes[id]
     if (mux) {
-      mux.sendControlMessage(new Uint8Array(str2ab(JSON.stringify(message))))
+      mux.sendControlMessage(encodeObject(message))
     }
   }
 }
