@@ -1,22 +1,24 @@
 #!/usr/bin/env node
 
 const WebSocket = require('ws');
-const WebSocketStream = require('ws-streamify').default;
 const args = require('commander');
 const uuid = require('uuid/v4');
+const url = require('url');
+const { 
+  Multiplexer,
+  encodeObject,
+  decodeObject
+} = require('omnistreams')
+//const { WriteStreamAdapter } = require('omnistreams-node-adapter')
 
 
 class RequestManager {
   constructor(httpServer) {
-    
+
     const streamHandler = (stream, settings) => {
 
       const id = settings.id;
       const res = this._responseStreams[id];
-
-      res.on('close', () => {
-        stream.socket.close();
-      });
 
       if (settings.range) {
         let end;
@@ -28,34 +30,61 @@ class RequestManager {
         }
 
         const len = end - settings.range.start;
-        res.setHeader('Content-Range', `bytes ${settings.range.start}-${end}/${settings.size}`);
+        const contentRange = `bytes ${settings.range.start}-${end}/${settings.size}`;
+        console.log(contentRange);
+        res.setHeader('Content-Range', contentRange);
         res.setHeader('Content-Length', len + 1);
-        res.setHeader('Accept-Ranges', 'bytes');
         res.statusCode = 206;
       }
       else {
         res.setHeader('Content-Length', settings.size);
-        res.setHeader('Accept-Ranges', 'bytes');
       }
 
+      res.setHeader('Accept-Ranges', 'bytes');
       res.setHeader('Content-Type', 'application/octet-stream');
 
-      stream.pipe(res);
+      // TODO: fix the node adapter. The way we're doing things below doesn't
+      // have backpressuring from node.
+      //stream.pipe(new WriteStreamAdapter({ nodeStream: res, bufferSize: 10 }))
+
+      stream.onData((data) => {
+        res.write(Buffer.from(data))
+        stream.request(1)
+      })
+
+      stream.onEnd(() => {
+        res.end()
+      })
+
+      res.on('close', () => {
+        stream.terminate()
+      })
+
+      stream.request(10)
     };
 
 
-    const wss = new WebSocket.Server({ server: httpServer });
+    const streamWsServer = new WebSocket.Server({ noServer: true });
 
-    wss.on('connection', (ws) => {
-      const messageHandler = (rawMessage) => {
-        const message = JSON.parse(rawMessage);
+    streamWsServer.on('connection', (ws) => {
+      console.log("streamy mux");
 
+      const mux = new Multiplexer()
+      console.log(mux);
+
+      mux.setSendHandler((message) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(message)
+        }
+      })
+
+      ws.onmessage = (message) => {
+        mux.handleMessage(message.data)
+      }
+
+      mux.onControlMessage((rawMessage) => {
+        const message = decodeObject(rawMessage)
         switch(message.type) {
-          case 'convert-to-stream':
-            ws.removeListener('message', messageHandler);
-            const stream = new WebSocketStream(ws, { highWaterMark: 1024 })
-            streamHandler(stream, message);
-            break;
           case 'error':
             const res = this._responseStreams[message.requestId];
             const e = message;
@@ -63,32 +92,48 @@ class RequestManager {
             res.writeHead(e.code, e.message, {'Content-type':'text/plain'});
             res.end();
             break;
+          case 'keep-alive':
+            break;
           default:
             throw "Invalid message type: " + message.type
             break;
         }
-      };
+      })
+
+      mux.onConduit((producer, md) => {
+        const metadata = decodeObject(md)
+        console.log(metadata)
+        streamHandler(producer, metadata);
+      })
 
       const id = uuid();
 
       console.log("New ws connection: " + id);
 
-      this._cons[id] = ws;
+      this._muxes[id] = mux;
 
-      ws.send(JSON.stringify({
+      mux.sendControlMessage(encodeObject({
         type: 'complete-handshake',
         id,
-      }));
-
-      ws.on('message', messageHandler);
+      }))
 
       ws.on('close', () => {
         console.log("Remove connection: " + id);
-        delete this._cons[id];
+        delete this._muxes[id];
       });
     });
 
-    this._cons = {};
+    httpServer.on('upgrade', function upgrade(request, socket, head) {
+      const pathname = url.parse(request.url).pathname;
+
+      if (pathname === '/omnistreams') {
+        streamWsServer.handleUpgrade(request, socket, head, function done(ws) {
+          streamWsServer.emit('connection', ws, request);
+        });
+      }
+    });
+
+    this._muxes = {};
 
     this._nextRequestId = 0;
 
@@ -114,14 +159,9 @@ class RequestManager {
   }
 
   send(id, message) {
-    const ws = this._cons[id];
-    if (ws) {
-      if (ws.readyState == WebSocket.OPEN) {
-        ws.send(JSON.stringify(message));
-      }
-      else {
-        console.warn("Attempted to send when readyState = " + ws.readyState);
-      }
+    const mux = this._muxes[id]
+    if (mux) {
+      mux.sendControlMessage(encodeObject(message))
     }
   }
 }
@@ -164,6 +204,8 @@ function httpHandler(req, res){
 
     const options = {};
 
+    // TODO: parse byte range specs properly according to
+    // https://tools.ietf.org/html/rfc7233
     if (req.headers.range) {
 
       options.range = {};
