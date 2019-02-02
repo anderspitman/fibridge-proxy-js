@@ -9,7 +9,7 @@ const {
   encodeObject,
   decodeObject
 } = require('omnistreams')
-//const { WriteStreamAdapter } = require('omnistreams-node-adapter')
+const { WriteStreamAdapter } = require('omnistreams-node-adapter')
 
 
 class RequestManager {
@@ -19,6 +19,8 @@ class RequestManager {
 
       const id = settings.id;
       const res = this._responseStreams[id];
+
+      console.log("create stream: ", id)
 
       if (settings.range) {
         let end;
@@ -43,24 +45,14 @@ class RequestManager {
       res.setHeader('Accept-Ranges', 'bytes');
       res.setHeader('Content-Type', 'application/octet-stream');
 
-      // TODO: fix the node adapter. The way we're doing things below doesn't
-      // have backpressuring from node.
-      //stream.pipe(new WriteStreamAdapter({ nodeStream: res, bufferSize: 10 }))
-
-      stream.onData((data) => {
-        res.write(Buffer.from(data))
-        stream.request(1)
+      const consumer = new WriteStreamAdapter({
+        nodeStream: res, bufferSize: 10
       })
+      stream.pipe(consumer)
 
-      stream.onEnd(() => {
-        res.end()
+      consumer.onFinish(() => {
+        console.log("consumer done")
       })
-
-      res.on('close', () => {
-        stream.terminate()
-      })
-
-      stream.request(10)
     };
 
 
