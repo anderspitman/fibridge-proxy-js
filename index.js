@@ -9,7 +9,8 @@ const {
   encodeObject,
   decodeObject
 } = require('omnistreams')
-const { WriteStreamAdapter } = require('omnistreams-node-adapter')
+const { UnbufferedWriteStreamAdapter } = require('omnistreams-node-adapter')
+//const { WriteStreamAdapter } = require('omnistreams-node-adapter')
 
 
 class RequestManager {
@@ -45,9 +46,12 @@ class RequestManager {
       res.setHeader('Accept-Ranges', 'bytes');
       res.setHeader('Content-Type', 'application/octet-stream');
 
-      const consumer = new WriteStreamAdapter({
-        nodeStream: res, bufferSize: 10
-      })
+      //const consumer = new WriteStreamAdapter({
+      //  nodeStream: res, bufferSize: 200
+      //})
+
+      const consumer = new UnbufferedWriteStreamAdapter(res)
+
       stream.pipe(consumer)
 
       consumer.onFinish(() => {
