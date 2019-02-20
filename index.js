@@ -10,6 +10,7 @@ const {
   decodeObject
 } = require('omnistreams')
 const { UnbufferedWriteStreamAdapter } = require('omnistreams-node-adapter')
+const { BufferConduit } = require('omnistreams-conduit')
 //const { WriteStreamAdapter } = require('omnistreams-node-adapter')
 
 
@@ -50,9 +51,10 @@ class RequestManager {
       //  nodeStream: res, bufferSize: 200
       //})
 
+      const buffer = new BufferConduit(22)
       const consumer = new UnbufferedWriteStreamAdapter(res)
 
-      stream.pipe(consumer)
+      stream.pipe(buffer).pipe(consumer)
 
       consumer.onFinish(() => {
         console.log("consumer done")
