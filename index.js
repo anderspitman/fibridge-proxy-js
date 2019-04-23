@@ -25,14 +25,15 @@ class RequestManager {
           end = settings.range.end;
         }
         else {
-          end = settings.size - 1;
+          end = settings.size;
         }
 
         const len = end - settings.range.start;
-        const contentRange = `bytes ${settings.range.start}-${end}/${settings.size}`;
+        // Need to subtract one from end because HTTP ranges are inclusive
+        const contentRange = `bytes ${settings.range.start}-${end - 1}/${settings.size}`;
         console.log(contentRange);
         res.setHeader('Content-Range', contentRange);
-        res.setHeader('Content-Length', len + 1);
+        res.setHeader('Content-Length', len);
         res.statusCode = 206;
       }
       else {
@@ -207,7 +208,8 @@ function httpHandler(req, res){
       options.range.start = Number(range[0]);
 
       if (range[1]) {
-        options.range.end = Number(range[1]);
+        // Need to add one because HTTP ranges are inclusive
+        options.range.end = 1 + Number(range[1]);
       }
     }
 
