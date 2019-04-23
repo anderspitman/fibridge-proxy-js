@@ -4,12 +4,8 @@ const WebSocket = require('ws');
 const args = require('commander');
 const uuid = require('uuid/v4');
 const url = require('url');
-const { 
-  Multiplexer,
-  encodeObject,
-  decodeObject
-} = require('omnistreams')
-const { UnbufferedWriteStreamAdapter } = require('omnistreams-node-adapter')
+import { Multiplexer, encodeObject, decodeObject } from 'omnistreams';
+import { UnbufferedWriteStreamAdapter } from 'omnistreams-node-adapter';
 //const { WriteStreamAdapter } = require('omnistreams-node-adapter')
 
 
