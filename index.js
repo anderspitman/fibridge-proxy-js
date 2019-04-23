@@ -4,14 +4,18 @@ const WebSocket = require('ws');
 const args = require('commander');
 const uuid = require('uuid/v4');
 const url = require('url');
-const { 
-  Multiplexer,
-  encodeObject,
-  decodeObject
-} = require('omnistreams')
-const { UnbufferedWriteStreamAdapter } = require('omnistreams-node-adapter')
+const { Multiplexer } = require('omnistreams-concurrent');
+const { UnbufferedWriteStreamAdapter } = require('omnistreams-node-adapter');
 //const { WriteStreamAdapter } = require('omnistreams-node-adapter')
 
+function encodeObject(obj) {
+  const enc = new TextEncoder();
+  return enc.encode(JSON.stringify(obj));
+}
+
+function decodeObject(array) {
+  return JSON.parse(String.fromCharCode.apply(null, new Uint8Array(array)));
+}
 
 class RequestManager {
   constructor(httpServer) {
