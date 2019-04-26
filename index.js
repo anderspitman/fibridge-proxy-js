@@ -19,25 +19,25 @@ class RequestManager {
 
       console.log("create stream: ", id)
 
-      if (settings.range) {
+      if (settings.result.range) {
         let end;
-        if (settings.range.end) {
-          end = settings.range.end;
+        if (settings.result.range.end) {
+          end = settings.result.range.end;
         }
         else {
-          end = settings.size;
+          end = settings.result.size;
         }
 
-        const len = end - settings.range.start;
+        const len = end - settings.result.range.start;
         // Need to subtract one from end because HTTP ranges are inclusive
-        const contentRange = `bytes ${settings.range.start}-${end - 1}/${settings.size}`;
+        const contentRange = `bytes ${settings.result.range.start}-${end - 1}/${settings.result.size}`;
         console.log(contentRange);
         res.setHeader('Content-Range', contentRange);
         res.setHeader('Content-Length', len);
         res.statusCode = 206;
       }
       else {
-        res.setHeader('Content-Length', settings.size);
+        res.setHeader('Content-Length', settings.result.size);
       }
 
       res.setHeader('Accept-Ranges', 'bytes');
@@ -77,19 +77,15 @@ class RequestManager {
 
       mux.onControlMessage((rawMessage) => {
         const message = decodeObject(rawMessage)
-        switch(message.type) {
-          case 'error':
-            const res = this._responseStreams[message.requestId];
-            const e = message;
+
+        if (message.jsonrpc) {
+          if (message.error) {
+            const res = this._responseStreams[message.id];
+            const e = message.error;
             console.log("Error:", e);
-            res.writeHead(e.code, e.message, {'Content-type':'text/plain'});
+            res.writeHead(404, e.message, {'Content-type':'text/plain'});
             res.end();
-            break;
-          case 'keep-alive':
-            break;
-          default:
-            throw "Invalid message type: " + message.type
-            break;
+          }
         }
       })
 
@@ -106,8 +102,9 @@ class RequestManager {
       this._muxes[id] = mux;
 
       mux.sendControlMessage(encodeObject({
-        type: 'complete-handshake',
-        id,
+        jsonrpc: '2.0',
+        method: 'setId',
+        params: id,
       }))
 
       ws.on('close', () => {
@@ -139,7 +136,7 @@ class RequestManager {
 
     this.send(id, {
       ...options,
-      requestId,
+      id: requestId,
     });
 
     this._responseStreams[requestId] = res;
@@ -193,7 +190,7 @@ function httpHandler(req, res){
 
     const urlParts = req.url.split('/');
     const id = urlParts[1];
-    const url = '/' + urlParts.slice(2).join('/');
+    const path = '/' + urlParts.slice(2).join('/');
 
     const options = {};
 
@@ -214,9 +211,12 @@ function httpHandler(req, res){
     }
 
     requestManager.addRequest(id, res, {
-      type: 'GET',
-      url,
-      range: options.range,
+      jsonrpc: '2.0',
+      method: 'getFile',
+      params: {
+        path,
+        range: options.range,
+      },
     });
 
     
