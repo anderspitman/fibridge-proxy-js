@@ -52,7 +52,6 @@ class RequestManager {
       stream.pipe(consumer)
 
       consumer.onFinish(() => {
-        console.log("consumer done")
       })
     };
 
@@ -60,10 +59,8 @@ class RequestManager {
     const streamWsServer = new WebSocket.Server({ noServer: true });
 
     streamWsServer.on('connection', (ws) => {
-      console.log("streamy mux");
 
       const mux = new Multiplexer()
-      console.log(mux);
 
       mux.setSendHandler((message) => {
         if (ws.readyState === WebSocket.OPEN) {
