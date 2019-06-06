@@ -4,18 +4,10 @@ const WebSocket = require('ws');
 const args = require('commander');
 const uuid = require('uuid/v4');
 const url = require('url');
-const { Multiplexer } = require('omnistreams-concurrent');
-const { UnbufferedWriteStreamAdapter } = require('omnistreams-node-adapter');
+import { Multiplexer, encodeObject, decodeObject } from 'omnistreams';
+import { UnbufferedWriteStreamAdapter } from 'omnistreams-node-adapter';
 //const { WriteStreamAdapter } = require('omnistreams-node-adapter')
 
-function encodeObject(obj) {
-  const enc = new TextEncoder();
-  return enc.encode(JSON.stringify(obj));
-}
-
-function decodeObject(array) {
-  return JSON.parse(String.fromCharCode.apply(null, new Uint8Array(array)));
-}
 
 class RequestManager {
   constructor(httpServer) {
@@ -27,24 +19,25 @@ class RequestManager {
 
       console.log("create stream: ", id)
 
-      if (settings.range) {
+      if (settings.result.range) {
         let end;
-        if (settings.range.end) {
-          end = settings.range.end;
+        if (settings.result.range.end) {
+          end = settings.result.range.end;
         }
         else {
-          end = settings.size - 1;
+          end = settings.result.size;
         }
 
-        const len = end - settings.range.start;
-        const contentRange = `bytes ${settings.range.start}-${end}/${settings.size}`;
+        const len = end - settings.result.range.start;
+        // Need to subtract one from end because HTTP ranges are inclusive
+        const contentRange = `bytes ${settings.result.range.start}-${end - 1}/${settings.result.size}`;
         console.log(contentRange);
         res.setHeader('Content-Range', contentRange);
-        res.setHeader('Content-Length', len + 1);
+        res.setHeader('Content-Length', len);
         res.statusCode = 206;
       }
       else {
-        res.setHeader('Content-Length', settings.size);
+        res.setHeader('Content-Length', settings.result.size);
       }
 
       res.setHeader('Accept-Ranges', 'bytes');
@@ -59,7 +52,6 @@ class RequestManager {
       stream.pipe(consumer)
 
       consumer.onFinish(() => {
-        console.log("consumer done")
       })
     };
 
@@ -67,10 +59,8 @@ class RequestManager {
     const streamWsServer = new WebSocket.Server({ noServer: true });
 
     streamWsServer.on('connection', (ws) => {
-      console.log("streamy mux");
 
       const mux = new Multiplexer()
-      console.log(mux);
 
       mux.setSendHandler((message) => {
         if (ws.readyState === WebSocket.OPEN) {
@@ -84,19 +74,15 @@ class RequestManager {
 
       mux.onControlMessage((rawMessage) => {
         const message = decodeObject(rawMessage)
-        switch(message.type) {
-          case 'error':
-            const res = this._responseStreams[message.requestId];
-            const e = message;
+
+        if (message.jsonrpc) {
+          if (message.error) {
+            const res = this._responseStreams[message.id];
+            const e = message.error;
             console.log("Error:", e);
-            res.writeHead(e.code, e.message, {'Content-type':'text/plain'});
+            res.writeHead(404, e.message, {'Content-type':'text/plain'});
             res.end();
-            break;
-          case 'keep-alive':
-            break;
-          default:
-            throw "Invalid message type: " + message.type
-            break;
+          }
         }
       })
 
@@ -113,8 +99,9 @@ class RequestManager {
       this._muxes[id] = mux;
 
       mux.sendControlMessage(encodeObject({
-        type: 'complete-handshake',
-        id,
+        jsonrpc: '2.0',
+        method: 'setId',
+        params: id,
       }))
 
       ws.on('close', () => {
@@ -146,7 +133,7 @@ class RequestManager {
 
     this.send(id, {
       ...options,
-      requestId,
+      id: requestId,
     });
 
     this._responseStreams[requestId] = res;
@@ -200,7 +187,7 @@ function httpHandler(req, res){
 
     const urlParts = req.url.split('/');
     const id = urlParts[1];
-    const url = '/' + urlParts.slice(2).join('/');
+    const path = '/' + urlParts.slice(2).join('/');
 
     const options = {};
 
@@ -215,14 +202,18 @@ function httpHandler(req, res){
       options.range.start = Number(range[0]);
 
       if (range[1]) {
-        options.range.end = Number(range[1]);
+        // Need to add one because HTTP ranges are inclusive
+        options.range.end = 1 + Number(range[1]);
       }
     }
 
     requestManager.addRequest(id, res, {
-      type: 'GET',
-      url,
-      range: options.range,
+      jsonrpc: '2.0',
+      method: 'getFile',
+      params: {
+        path,
+        range: options.range,
+      },
     });
 
     
